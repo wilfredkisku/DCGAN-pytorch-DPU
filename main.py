@@ -58,30 +58,90 @@ beta1 = 0.5
 # Number of GPUs available. Use 0 for CPU mode.
 ngpu = 0
 
-
-# We can use an image folder dataset the way we have it setup.
-# Create the dataset
-dataset = dset.ImageFolder(root=dataroot,
-                           transform=transforms.Compose([
+def createDataset():
+    # We can use an image folder dataset the way we have it setup.
+    # Create the dataset
+    dataset = dset.ImageFolder(root=dataroot,
+            transform=transforms.Compose([
                                transforms.Resize(image_size),
                                transforms.CenterCrop(image_size),
                                transforms.ToTensor(),
                                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                            ]))
-# Create the dataloader
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-                                         shuffle=True, num_workers=workers)
 
-# Decide which device we want to run on
-device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
+    # Create the dataloader
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+            shuffle=True, num_workers=workers)
+    return dataloader
 
-# Plot some training images
-real_batch = next(iter(dataloader))
-plt.figure(figsize=(8,8))
-plt.axis("off")
-plt.title("Training Images")
-plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=2, normalize=True).cpu(),(1,2,0)))
-plt.show()
+def visualize(dataloader):
+    # Plot some training images
+    real_batch = next(iter(dataloader))
+    plt.figure(figsize=(8,8))
+    plt.axis("off")
+    plt.title("Training Images")
+    plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=2, normalize=True).cpu(),(1,2,0)))
+    plt.show()
+    return None
 
-print(Generator(ngpu).to(device))
-print(Discriminator(ngpu).to(device))
+# custom weights initialization called on netG and netD
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
+
+def initializer():
+
+    #################
+    ##### GEN  ######
+    #################
+
+    # Create the generator
+    netG = Generator(ngpu).to(device)
+
+    # Handle multi-gpu if desired
+    if (device.type == 'cuda') and (ngpu > 1):
+        netG = nn.DataParallel(netG, list(range(ngpu)))
+
+    # Apply the weights_init function to randomly initialize all weights
+    #  to mean=0, stdev=0.02.
+    netG.apply(weights_init)
+
+    # Print the model
+    print(netG)
+
+    #################
+    ### DISC ########
+    #################
+
+    # Create the Discriminator
+    netD = Discriminator(ngpu).to(device)
+
+    # Handle multi-gpu if desired
+    if (device.type == 'cuda') and (ngpu > 1):
+        netD = nn.DataParallel(netD, list(range(ngpu)))
+
+    # Apply the weights_init function to randomly initialize all weights
+    #  to mean=0, stdev=0.2.
+    netD.apply(weights_init)
+
+    # Print the model
+    print(netD)
+
+    return netG, netD
+if __name__ == "__main__":
+    # Decide which device we want to run on
+    device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
+
+    dataloader = createDataset()
+    #visualize(dataloader)
+    
+
+    netG, netD = initializer()
+
+    ##create the genrator and discriminator 
+    #print(Generator(ngpu).to(device))
+    #print(Discriminator(ngpu).to(device))
